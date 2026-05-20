@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "TXU0104RUTR") (type "KiCad") (uri "${KIPRJMOD}/TXU0104RUTR.kicad_sym") (options "") (descr ""))
+)
