@@ -2,7 +2,7 @@
   "board": {
     "active_layer": 2,
     "active_layer_preset": "",
-    "auto_track_width": false,
+    "auto_track_width": true,
     "hidden_netclasses": [],
     "hidden_nets": [],
     "high_contrast_mode": 0,
@@ -34,7 +34,6 @@
       "footprint_text",
       "footprint_anchors",
       "ratsnest",
-      "grid",
       "footprints_front",
       "footprints_back",
       "footprint_values",
@@ -52,11 +51,11 @@
       "shapes",
       "ly_points"
     ],
-    "visible_layers": "ffffffff_ffffffff_ffffffff_ffffffff",
-    "zone_display_mode": 1
+    "visible_layers": "ffffffff_ffffffff_ffffffff_ffffffaf",
+    "zone_display_mode": 0
   },
   "git": {
-    "integration_disabled": true,
+    "integration_disabled": false,
     "repo_type": "",
     "repo_username": "",
     "ssh_key": ""
