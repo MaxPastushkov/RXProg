@@ -8,7 +8,7 @@
 	(property "Reference" "REF**"
 		(at 0 1.8 0)
 		(layer "F.SilkS")
-		(uuid "46911422-3820-4685-8eb9-dd38f24280ef")
+		(uuid "9fc1448d-7a7d-4420-8621-ca6fce63b449")
 		(effects
 			(font
 				(size 1 1)
@@ -19,7 +19,7 @@
 	(property "Value" "Pin"
 		(at 0 -1.8 0)
 		(layer "F.Fab")
-		(uuid "1a841633-4790-4eab-8359-b5cb686083b2")
+		(uuid "41bf79d4-05b8-4d36-9c81-ca5b60c7b97b")
 		(effects
 			(font
 				(size 1 1)
@@ -32,7 +32,7 @@
 		(unlocked yes)
 		(layer "F.Fab")
 		(hide yes)
-		(uuid "cd6a950b-b8fc-4ea9-9030-87546d615916")
+		(uuid "9d309f2c-51c2-4f50-b563-82efb4f6dec8")
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -45,7 +45,7 @@
 		(unlocked yes)
 		(layer "F.Fab")
 		(hide yes)
-		(uuid "28810744-27d0-4be8-a802-423f3e760030")
+		(uuid "240e9a67-48f5-49db-9d07-b39e2736c921")
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -57,14 +57,14 @@
 	(duplicate_pad_numbers_are_jumpers no)
 	(fp_circle
 		(center 0 0)
-		(end 0.5 -0.5)
+		(end 0.65 -0.65)
 		(stroke
 			(width 0.1)
 			(type default)
 		)
 		(fill no)
 		(layer "F.SilkS")
-		(uuid "b4c7fec0-9701-4479-a8da-38ccc0342bfa")
+		(uuid "8ac6c87e-4c53-4d79-9a92-36fccd274422")
 	)
 	(fp_circle
 		(center 0 0)
@@ -75,12 +75,12 @@
 		)
 		(fill no)
 		(layer "F.CrtYd")
-		(uuid "d9347183-8925-4679-9af2-6edfb6d7ba69")
+		(uuid "eb8379e0-71f1-4a88-9e17-fc7e3629f19c")
 	)
 	(fp_text user "${REFERENCE}"
 		(at 0 1.8 0)
 		(layer "F.Fab")
-		(uuid "192853d3-a8fb-4dc7-8855-d52a469bd99d")
+		(uuid "0ad9a416-4cb5-4ba9-99dd-cc5c931940eb")
 		(effects
 			(font
 				(size 1 1)
@@ -94,7 +94,7 @@
 		(drill 0.7)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
-		(uuid "da048e8b-c4ee-438b-bd3c-d3afaecbc758")
+		(uuid "1c013df9-a731-438b-b9d9-d29c900af652")
 	)
 	(embedded_fonts no)
 	(model "${KICAD10_3DMODEL_DIR}/Connector_Pin.3dshapes/Pin_D0.7mm_L6.5mm_W1.8mm_FlatFork.step"
