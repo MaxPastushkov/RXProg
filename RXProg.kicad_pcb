@@ -7577,6 +7577,18 @@
 		(layer "Edge.Cuts")
 		(uuid "5be23dd8-3d0a-43f4-a95f-17b4dfe71219")
 	)
+	(gr_text "Short for RX5"
+		(at 121.1 99.1 0)
+		(layer "F.SilkS")
+		(uuid "a27d1f30-f80c-4850-9084-6fb8ea3d2cfb")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+			(justify left bottom)
+		)
+	)
 	(gr_text "CS2"
 		(at 127.15 115.65 0)
 		(layer "F.SilkS")
