@@ -52,7 +52,8 @@
 #define APP_RX_DATA_SIZE  1024
 #define APP_TX_DATA_SIZE  1024
 /* USER CODE BEGIN EXPORTED_DEFINES */
-
+/* Max time (ms) CDC_Printf will spin waiting for a busy USB endpoint */
+#define CDC_PRINTF_TIMEOUT_MS  10U
 /* USER CODE END EXPORTED_DEFINES */
 
 /**
@@ -109,7 +110,7 @@ extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
-
+int CDC_Printf(const char *fmt, ...);
 /* USER CODE END EXPORTED_FUNCTIONS */
 
 /**

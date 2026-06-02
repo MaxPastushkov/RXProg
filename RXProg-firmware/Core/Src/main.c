@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "usbd_cdc_if.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,6 +34,9 @@ typedef void (*exti_handler_t)(uint16_t GPIO_Pin);
 /* USER CODE BEGIN PD */
 #define GPIOA_OUTPUT_MODE 0x2BF55555
 #define GPIOA_INPUT_MODE  0x2BF50000
+
+#define SAVE_ADDR 0x0807A000UL
+#define BANK_SIZE 8192u
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,11 +49,17 @@ typedef void (*exti_handler_t)(uint16_t GPIO_Pin);
 /* USER CODE BEGIN PV */
 
 static uint8_t RX5 = 0;
-static exti_handler_t exti_handler;
 
-static volatile uint8_t ram1_data[8192];
-static volatile uint8_t ram2_data[8192];
-static volatile uint8_t ram3_data[8192];
+static volatile uint8_t ram1_data[BANK_SIZE];
+static volatile uint8_t ram2_data[BANK_SIZE];
+static volatile uint8_t ram3_data[BANK_SIZE];
+
+// Count accesses to each address
+static volatile uint16_t ram1_count[BANK_SIZE];
+static volatile uint16_t ram2_count[BANK_SIZE];
+static volatile uint16_t ram3_count[BANK_SIZE];
+
+volatile uint8_t dump_request = 0;
 
 /* USER CODE END PV */
 
@@ -58,8 +67,8 @@ static volatile uint8_t ram3_data[8192];
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
-static void RX5_EXTI_Callback(uint16_t GPIO_Pin);
-static void RX11_EXTI_Callback(uint16_t GPIO_Pin);
+static void write_ram_to_flash(void);
+static void usb_send(const uint8_t *data, uint32_t len);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -75,6 +84,9 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+
+  uint32_t last_reset_edge_time = 0;
+  GPIO_PinState last_reset_state = 0;
 
   /* USER CODE END 1 */
 
@@ -102,12 +114,18 @@ int main(void)
   // Check if RX5 jumper is shorted
   RX5 = (HAL_GPIO_ReadPin(RX5_GPIO_Port, RX5_Pin) == GPIO_PIN_RESET);
 
-  // Set correct interrupt handler
-  exti_handler = RX5 ? RX5_EXTI_Callback : RX11_EXTI_Callback;
-
   // Enable both level shifters
   HAL_GPIO_WritePin(ADDR_OE_GPIO_Port, ADDR_OE_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(DATA_OE_GPIO_Port, DATA_OE_Pin, GPIO_PIN_RESET);
+
+  CDC_Printf("Copying saved flash data to RAM...\n");
+
+  // Copy saved flash values to buffers
+  memcpy((void *)ram1_data, (const void *)(SAVE_ADDR + 0 * BANK_SIZE), BANK_SIZE);
+  memcpy((void *)ram2_data, (const void *)(SAVE_ADDR + 1 * BANK_SIZE), BANK_SIZE);
+  memcpy((void *)ram3_data, (const void *)(SAVE_ADDR + 2 * BANK_SIZE), BANK_SIZE);
+
+  CDC_Printf("Done.\n");
 
   /* USER CODE END 2 */
 
@@ -118,6 +136,64 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+     if (dump_request)
+     {
+       usb_send((const uint8_t *)ram1_count, sizeof(uint16_t));
+       usb_send((const uint8_t *)ram2_count, sizeof(uint16_t));
+       usb_send((const uint8_t *)ram3_count, sizeof(uint16_t));
+       dump_request = 0;
+     }
+
+     GPIO_PinState reset_state;
+     if (RX5)
+       reset_state = !HAL_GPIO_ReadPin(VBAT_RES_GPIO_Port, VBAT_RES_Pin);
+     else
+       reset_state = HAL_GPIO_ReadPin(RES_OE_GPIO_Port, RES_OE_Pin);
+
+     if (reset_state)
+     {
+       if (!last_reset_state)
+         last_reset_edge_time = HAL_GetTick();
+
+       if (HAL_GetTick() - last_reset_edge_time > 1000)
+       {
+         // Go into reset
+
+         // Copy ram buffers to flash
+         write_ram_to_flash();
+
+         HAL_GPIO_WritePin(ADDR_OE_GPIO_Port, ADDR_OE_Pin, GPIO_PIN_SET);
+         HAL_GPIO_WritePin(DATA_OE_GPIO_Port, DATA_OE_Pin, GPIO_PIN_SET);
+
+         GPIOA->MODER = 0xFFF5FFFF; // Keep addr/data level shifters disabled
+         GPIOB->MODER = 0xFFFFFFFF;
+         GPIOC->MODER = 0xC3FFFFFF; // Set all analog but the reset lines
+
+         // Configure interrupts on reset lines
+         GPIO_InitTypeDef GPIO_InitStruct = {0};
+         GPIO_InitStruct.Pin = VBAT_RES_Pin|RES_OE_Pin;
+         GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+         GPIO_InitStruct.Pull = GPIO_NOPULL;
+         HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+         HAL_SuspendTick();
+         HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
+
+         // The STM is now waiting for the device to power up again
+
+         // Re-init everything
+         SystemClock_Config();
+         HAL_ResumeTick();
+         MX_GPIO_Init();
+
+         // Enable both level shifters
+         HAL_GPIO_WritePin(ADDR_OE_GPIO_Port, ADDR_OE_Pin, GPIO_PIN_RESET);
+         HAL_GPIO_WritePin(DATA_OE_GPIO_Port, DATA_OE_Pin, GPIO_PIN_RESET);
+       }
+     }
+
+     last_reset_state = reset_state;
    }
   /* USER CODE END 3 */
 }
@@ -178,7 +254,7 @@ static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
-  exti_handler = RX11_EXTI_Callback; // Prevent a null-pointer dereference
+
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
@@ -246,25 +322,35 @@ static void MX_GPIO_Init(void)
 __attribute__((section(".RamFunc")))
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  exti_handler(GPIO_Pin);
-}
-
-__attribute__((section(".RamFunc")))
-static void RX11_EXTI_Callback(uint16_t GPIO_Pin)
-{
   volatile uint8_t *ram_data;
-  if (GPIO_Pin == CS1_Pin)
-    ram_data = ram1_data;
-  else if (GPIO_Pin == CS2_Pin)
-    ram_data = ram2_data;
-  else
-    ram_data = ram3_data;
+  volatile uint16_t *ram_count;
 
-  if (WE_A11_GPIO_Port->IDR & WE_A11_Pin) // CPU is reading
+  if (GPIO_Pin == CS1_Pin)
+  {
+    ram_data = ram1_data;
+    ram_count = ram1_count;
+  }
+  else if (GPIO_Pin == CS2_Pin)
+  {
+    ram_data = ram2_data;
+    ram_count = ram2_count;
+  }
+  else
+  {
+    ram_data = ram3_data;
+    ram_count = ram3_count;
+  }
+
+  uint16_t addr = GPIOB->IDR & (RX5 ? 0x1FFF : 0x7FF);
+
+  uint8_t reading = RX5 ? !(RES_OE_GPIO_Port->IDR & RES_OE_Pin)
+                        : (WE_A11_GPIO_Port->IDR & WE_A11_Pin);
+
+  if (reading) // CPU is reading
   {
     GPIOA->ODR =
       (GPIOA->ODR & 0xFFFFFF00)
-      | (ram_data[GPIOB->IDR & 0x7FF] & 0xFF);
+      | (ram_data[addr] & 0xFF);
 
     GPIOA->MODER = GPIOA_OUTPUT_MODE; // Set port to output
   }
@@ -272,34 +358,60 @@ static void RX11_EXTI_Callback(uint16_t GPIO_Pin)
   {
     GPIOA->MODER = GPIOA_INPUT_MODE; // Set port to input
 
-    ram_data[GPIOB->IDR & 0x7FF] = GPIOA->IDR & 0xFF;
+    ram_data[addr] = GPIOA->IDR & 0xFF;
   }
+
+  ram_count[addr]++;
 }
 
-__attribute__((section(".RamFunc")))
-static void RX5_EXTI_Callback(uint16_t GPIO_Pin)
+static void write_ram_to_flash(void)
 {
-  volatile uint8_t *ram_data;
-  if (GPIO_Pin == CS1_Pin)
-    ram_data = ram1_data;
-  else if (GPIO_Pin == CS2_Pin)
-    ram_data = ram2_data;
-  else
-    ram_data = ram3_data;
+  volatile uint8_t *bufs[3] = { ram1_data, ram2_data, ram3_data };
 
-  if (!(RES_OE_GPIO_Port->IDR & RES_OE_Pin)) // CPU is reading
-  {
-    GPIOA->ODR =
-      (GPIOA->ODR & 0xFFFFFF00)
-      | (ram_data[GPIOB->IDR & 0x1FFF] & 0xFF);
+  HAL_FLASH_Unlock();
+  __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS);
 
-    GPIOA->MODER = GPIOA_OUTPUT_MODE; // Set port to output
+  /* --- erase the save region --- */
+  uint32_t dbank  = READ_BIT(FLASH->OPTR, FLASH_OPTR_DBANK);
+  uint32_t pagesz = dbank ? 0x800u : 0x1000u; /* 2 KB vs 4 KB pages */
+
+  FLASH_EraseInitTypeDef e = {0};
+  e.TypeErase = FLASH_TYPEERASE_PAGES;
+  e.NbPages   = (3u * BANK_SIZE) / pagesz;
+  if (dbank) {
+    e.Banks = FLASH_BANK_2;                          /* 0x08040000-0x0807FFFF */
+    e.Page  = (SAVE_ADDR - 0x08040000UL) / pagesz;
+  } else {
+    e.Banks = FLASH_BANK_1;
+    e.Page  = (SAVE_ADDR - 0x08000000UL) / pagesz;
   }
-  else
-  {
-    GPIOA->MODER = GPIOA_INPUT_MODE; // Set port to input
+  uint32_t page_err;
+  if (HAL_FLASHEx_Erase(&e, &page_err) != HAL_OK) { HAL_FLASH_Lock(); return; }
 
-    ram_data[GPIOB->IDR & 0x1FFF] = GPIOA->IDR & 0xFF;
+  /* --- program 8 bytes at a time --- */
+  uint32_t addr = SAVE_ADDR;
+  for (int b = 0; b < 3; b++) {
+    for (uint32_t i = 0; i < BANK_SIZE; i += 8) {
+      uint64_t dw;
+      memcpy(&dw, (const void *)(bufs[b] + i), 8); /* avoids alignment/aliasing issues */
+      if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, addr, dw) != HAL_OK) {
+        HAL_FLASH_Lock();
+        return;
+      }
+      addr += 8;
+    }
+  }
+  HAL_FLASH_Lock();
+}
+
+static void usb_send(const uint8_t *data, uint32_t len)
+{
+  while (len)
+  {
+    uint32_t chunk = len > APP_TX_DATA_SIZE ? APP_TX_DATA_SIZE : len;
+    while (CDC_Transmit_FS((uint8_t *)data, chunk) == USBD_BUSY) { }  // wait for EP
+    data += chunk;
+    len  -= chunk;
   }
 }
 

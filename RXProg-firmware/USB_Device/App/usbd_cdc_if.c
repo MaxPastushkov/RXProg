@@ -22,7 +22,8 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include <stdarg.h>
+#include <stdio.h>
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -263,6 +264,12 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   /* USER CODE BEGIN 6 */
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
+  extern volatile uint8_t dump_request;
+
+  if (Len && Buf[0] == 'd') // dump
+    dump_request = 1;
+
   return (USBD_OK);
   /* USER CODE END 6 */
 }
@@ -316,6 +323,48 @@ static int8_t CDC_TransmitCplt_FS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
 }
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
+
+/**
+  * @brief  printf-style formatted send over the USB CDC virtual COM port.
+  *         Formats into a local buffer, then transmits, retrying while the
+  *         USB IN endpoint is busy (up to CDC_PRINTF_TIMEOUT_MS).
+  * @param  fmt: printf-style format string
+  * @retval Number of characters formatted (excluding the NUL terminator),
+  *         or a negative value if formatting failed. Note: the return value
+  *         reflects formatting, not how many bytes the host actually read.
+  */
+int CDC_Printf(const char *fmt, ...)
+{
+  static char buf[APP_TX_DATA_SIZE];
+  va_list args;
+  int len;
+
+  va_start(args, fmt);
+  len = vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+
+  if (len <= 0)
+  {
+    return len;
+  }
+
+  /* vsnprintf returns the length it *would* have written; clamp to buffer. */
+  if (len > (int)sizeof(buf) - 1)
+  {
+    len = (int)sizeof(buf) - 1;
+  }
+
+  uint32_t start = HAL_GetTick();
+  while (CDC_Transmit_FS((uint8_t *)buf, (uint16_t)len) == USBD_BUSY)
+  {
+    if ((HAL_GetTick() - start) >= CDC_PRINTF_TIMEOUT_MS)
+    {
+      break;  /* host not draining / not connected — drop rather than block */
+    }
+  }
+
+  return len;
+}
 
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
 
